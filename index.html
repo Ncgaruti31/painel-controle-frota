@@ -15,12 +15,30 @@
 <div id="appView" class="hidden">
 <header><div><h1>Painel de Controle da Frota</h1><p>Disponibilidade • Manutenção • Calibração • Emissões</p></div><div><span id="userInfo"></span> <button class="btn secondary" id="exportAll">Exportar JSON</button> <button class="btn secondary" id="logoutBtn">Sair</button></div></header>
 <main class="wrap"><div class="notice" id="roleNotice"></div><div class="tabs" id="tabs"></div><section id="dashboard"></section>
-<section class="panel hidden" id="tablePanel"><div class="toolbar"><input type="search" id="search" placeholder="Pesquisar nesta aba..."><button class="btn" id="addBtn">+ Novo registro</button></div><div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div></section></main><footer>Painel de Controle da Frota • Dados compartilhados via Supabase</footer></div>
+<section class="panel hidden" id="tablePanel"><div class="toolbar"><input type="search" id="search" placeholder="Pesquisar nesta aba..."><button class="btn" id="addBtn">+ Novo registro</button></div><div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div></section>
+<section class="panel hidden" id="userAdminPanel">
+  <h2>Gerenciamento de usuários</h2>
+  <p class="muted">Cadastre usuários e gerencie seus níveis de acesso. Novas contas podem ser criadas como Editor ou Consulta.</p>
+  <form id="userCreateForm">
+    <div class="form-grid">
+      <div class="field"><label for="newUserName">Nome</label><input id="newUserName" required maxlength="120"></div>
+      <div class="field"><label for="newUserEmail">E-mail</label><input id="newUserEmail" type="email" required></div>
+      <div class="field"><label for="newUserPassword">Senha inicial (mínimo 12 caracteres)</label><input id="newUserPassword" type="password" minlength="12" required autocomplete="new-password"></div>
+      <div class="field"><label for="newUserRole">Perfil</label><select id="newUserRole"><option value="consulta">Consulta</option><option value="editor">Editor</option></select></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Cadastrar usuário</button></div>
+  </form>
+  <div id="userAdminMessage" class="muted" role="status" aria-live="polite" style="margin:12px 0;white-space:pre-wrap"></div>
+  <div class="toolbar"><button class="btn secondary" id="refreshUsersBtn" type="button">Atualizar lista</button></div>
+  <div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody id="usersTbody"><tr><td colspan="5" class="empty">Carregue a lista para começar.</td></tr></tbody></table></div>
+</section></main><footer>Painel de Controle da Frota • Dados compartilhados via Supabase</footer></div>
 <div class="modal hidden" id="modal"><div class="modal-box"><div class="modal-head"><h2 id="modalTitle">Novo registro</h2><button class="btn secondary" id="closeModal">Fechar</button></div><form id="recordForm"><div class="form-grid" id="formFields"></div><div class="form-actions"><button type="button" class="btn secondary" id="cancelForm">Cancelar</button><button class="btn" type="submit">Salvar registro</button></div></form></div></div>
 <script>
 /* COLE A URL E A CHAVE PUBLICÁVEL DO SEU PROJETO NOS DOIS CAMPOS ABAIXO. */
 const SUPABASE_URL = "https://lrtbtpxxgkhgrmbehijs.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ow96FrVFYiB2iKfTF-fFZQ_8Ldf7rCh";
+// O endpoint exibido no Supabase para esta função termina em /functions/v1/super-endpoint.
+const USER_ADMIN_FUNCTION = "super-endpoint";
 const schemas={
 "Panorama":["Indicador","Valor","Observações"],
 "Compromisso":["Obra/Contrato","Categoria","Quantidade demandada","Quantidade disponível","Responsável","Observações"],
@@ -33,7 +51,7 @@ const schemas={
 "Emissões":["Prefixo","Equipamento","Obra","Data do último teste","Data de vencimento","Ciclo (dias)","Dias até vencer","Status","Observações"],
 "Movimentações":["Data","Prefixo","Equipamento","Origem","Destino","Tipo de movimentação","Responsável","Observações"]
 };
-let supabaseClient=null,user=null,userRole="consulta",activeTab="Panorama",records=[],editingId=null;
+let supabaseClient=null,user=null,userRole="consulta",activeTab="Panorama",records=[],editingId=null,userAdminActive=false;
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showMessage(s){$("message").textContent=s}
@@ -59,7 +77,14 @@ async function loadRecords(){
  records=data||[];
 }
 function rowsForTab(){return records.filter(x=>x.categoria===activeTab)}
-function renderTabs(){$("tabs").innerHTML=Object.keys(schemas).map(t=>`<button class="${t===activeTab?'active':''}" data-tab="${esc(t)}">${esc(t)}</button>`).join("");document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;render()})}
+function renderTabs(){
+  const regular=Object.keys(schemas).map(t=>`<button class="${!userAdminActive&&t===activeTab?'active':''}" data-tab="${esc(t)}">${esc(t)}</button>`).join("");
+  const adminButton=userRole==="administrador"?`<button class="${userAdminActive?'active':''}" id="userAdminTab">Gerenciar usuários</button>`:"";
+  $("tabs").innerHTML=regular+adminButton;
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;userAdminActive=false;render()});
+  const adminTab=$("userAdminTab");
+  if(adminTab) adminTab.onclick=async()=>{userAdminActive=true;render();await loadManagedUsers()};
+}
 function renderDashboard(){
  if(activeTab!=="Panorama"){$("dashboard").innerHTML="";return}
  const fleet=records.filter(x=>x.categoria==="Frota completa"),stopped=records.filter(x=>x.categoria==="Equipamentos parados"),calib=records.filter(x=>x.categoria==="Calibração"),emis=records.filter(x=>x.categoria==="Emissões");
@@ -73,7 +98,15 @@ function renderTable(){
  $("tbody").innerHTML=list.length?list.map(x=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(x.dados?.[f]):esc(x.dados?.[f]||"—")}</td>`).join("")}<td>${userRole==="consulta"?"—":`<button class="btn small secondary" data-edit="${x.id}">Editar</button> <button class="btn small danger" data-del="${x.id}">Excluir</button>`}</td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+1}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openForm(b.dataset.edit));document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRecord(b.dataset.del));
 }
-function render(){renderTabs();renderDashboard();$("tablePanel").classList.toggle("hidden",activeTab==="Panorama");$("search").value="";renderTable()}
+function render(){
+  renderTabs();
+  $("userAdminPanel").classList.toggle("hidden",!userAdminActive);
+  $("tablePanel").classList.toggle("hidden",userAdminActive||activeTab==="Panorama");
+  $("dashboard").classList.toggle("hidden",userAdminActive);
+  if(userAdminActive){$("dashboard").innerHTML="";return}
+  $("dashboard").classList.remove("hidden");
+  renderDashboard();$("search").value="";renderTable()
+}
 function openForm(id=null){
  if(userRole==="consulta")return;editingId=id;const item=id?records.find(x=>x.id===id):null,row=item?.dados||{};
  $("modalTitle").textContent=(id?"Editar registro — ":"Novo registro — ")+activeTab;
@@ -82,6 +115,68 @@ function openForm(id=null){
 }
 function closeForm(){$("modal").classList.add("hidden")}
 async function deleteRecord(id){if(userRole==="consulta"||!confirm("Deseja excluir este registro? Esta ação não pode ser desfeita."))return;const {error}=await supabaseClient.from("frota_registros").delete().eq("id",id);if(error){alert("Não foi possível excluir: "+error.message);return}await loadRecords();render()}
+
+async function callUserAdmin(actionPayload){
+  const {data,error}=await supabaseClient.functions.invoke(USER_ADMIN_FUNCTION,{body:actionPayload});
+  if(error) throw new Error(error.message||"Falha ao chamar a função de gerenciamento.");
+  if(data?.error) throw new Error(data.error);
+  return data;
+}
+function userAdminMessage(message,isError=false){
+  const el=$("userAdminMessage");el.textContent=message;el.style.color=isError?"#9c2531":"#17663b";
+}
+async function loadManagedUsers(){
+  if(userRole!=="administrador") return;
+  $("usersTbody").innerHTML='<tr><td colspan="5" class="empty">Carregando usuários...</td></tr>';
+  userAdminMessage("");
+  try{
+    const result=await callUserAdmin({action:"list"});
+    const users=Array.isArray(result.users)?result.users:[];
+    $("usersTbody").innerHTML=users.length?users.map(u=>{
+      const roleOptions=(u.id===user.id?["administrador","editor","consulta"]:(u.role==="administrador"?["administrador","editor","consulta"]:["editor","consulta"])).map(r=>`<option value="${r}" ${u.role===r?"selected":""} ${(r==="administrador"&&u.id!==user.id)?"disabled":""}>${r==="administrador"?"Administrador":r==="editor"?"Editor":"Consulta"}</option>`).join("");
+      const status=u.bloqueado?"Bloqueado":"Ativo";
+      const blockLabel=u.bloqueado?"Desbloquear":"Bloquear";
+      return `<tr>
+        <td>${esc(u.nome||"—")}</td><td>${esc(u.email||"—")}</td>
+        <td><select data-user-role="${esc(u.id)}" aria-label="Perfil de ${esc(u.email||"usuário")}">${roleOptions}</select></td>
+        <td><span class="badge ${u.bloqueado?"red":"green"}">${status}</span></td>
+        <td><button class="btn small secondary" data-save-role="${esc(u.id)}">Salvar perfil</button> <button class="btn small ${u.bloqueado?"":"danger"}" data-toggle-block="${esc(u.id)}" data-blocked="${u.bloqueado?"true":"false"}">${blockLabel}</button></td>
+      </tr>`;
+    }).join(""):'<tr><td colspan="5" class="empty">Nenhum usuário encontrado.</td></tr>';
+    document.querySelectorAll("[data-save-role]").forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.saveRole;
+      const roleSelect=document.querySelector(`[data-user-role="${CSS.escape(id)}"]`);
+      if(!roleSelect)return;
+      try{await callUserAdmin({action:"role",id,role:roleSelect.value});userAdminMessage("Perfil atualizado com sucesso.");await loadManagedUsers();}
+      catch(err){userAdminMessage("Não foi possível atualizar o perfil: "+err.message,true);}
+    });
+    document.querySelectorAll("[data-toggle-block]").forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.toggleBlock;
+      const bloquear=btn.dataset.blocked!=="true";
+      if(id===user.id){userAdminMessage("Não é permitido bloquear a própria conta.",true);return;}
+      if(!confirm(`Deseja ${bloquear?"bloquear":"desbloquear"} esta conta?`))return;
+      try{await callUserAdmin({action:"block",id,bloquear});userAdminMessage(`Conta ${bloquear?"bloqueada":"desbloqueada"} com sucesso.`);await loadManagedUsers();}
+      catch(err){userAdminMessage("Não foi possível alterar o status: "+err.message,true);}
+    });
+  }catch(err){
+    $("usersTbody").innerHTML='<tr><td colspan="5" class="empty">Não foi possível carregar os usuários.</td></tr>';
+    userAdminMessage("Erro ao consultar usuários: "+err.message,true);
+  }
+}
+$("userCreateForm").onsubmit=async e=>{
+  e.preventDefault();
+  if(userRole!=="administrador")return;
+  const nome=$("newUserName").value.trim(),email=$("newUserEmail").value.trim(),senha=$("newUserPassword").value,role=$("newUserRole").value;
+  if(senha.length<12){userAdminMessage("A senha deve ter pelo menos 12 caracteres.",true);return;}
+  try{
+    await callUserAdmin({action:"create",nome,email,senha,role});
+    $("userCreateForm").reset();
+    userAdminMessage("Usuário cadastrado com sucesso.");
+    await loadManagedUsers();
+  }catch(err){userAdminMessage("Não foi possível cadastrar o usuário: "+err.message,true);}
+};
+$("refreshUsersBtn").onclick=loadManagedUsers;
+
 $("loginForm").onsubmit=async e=>{e.preventDefault();showMessage("Entrando...");if(!supabaseClient){if(SUPABASE_URL.startsWith("COLE_AQUI")||SUPABASE_PUBLISHABLE_KEY.startsWith("COLE_AQUI")){showMessage("Falta configurar a URL e a Publishable key no arquivo index.html.");return}supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY)}const {data,error}=await supabaseClient.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error){showMessage("Não foi possível entrar: "+error.message);return}showMessage("");await enterApp(data.user)};
 $("logoutBtn").onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
 $("addBtn").onclick=()=>openForm();$("closeModal").onclick=closeForm;$("cancelForm").onclick=closeForm;$("search").oninput=renderTable;
