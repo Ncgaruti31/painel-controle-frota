@@ -11,9 +11,19 @@
 <section id="authView" class="auth">
 <h2>Painel de Controle da Frota</h2><p class="muted">Entre com seu e-mail e senha cadastrados.</p>
 <form id="loginForm"><div class="field"><label for="email">E-mail</label><input id="email" type="email" required autocomplete="username"></div><div class="field"><label for="password">Senha</label><input id="password" type="password" required autocomplete="current-password"></div><button class="btn" type="submit">Entrar</button></form>
-<div id="message"></div><p class="muted" style="font-size:12px">Acesso restrito a usuários cadastrados pelo administrador.</p></section>
+<div id="message"></div><p><button type="button" class="btn secondary" id="forgotPasswordBtn">Esqueci minha senha</button></p><p class="muted" style="font-size:12px">Acesso restrito a usuários cadastrados pelo administrador.</p></section>
+<section id="resetView" class="auth hidden">
+<h2>Definir nova senha</h2>
+<p class="muted">Digite sua nova senha e confirme para recuperar o acesso.</p>
+<form id="resetPasswordForm">
+  <div class="field"><label for="resetPassword">Nova senha (mínimo 12 caracteres)</label><input id="resetPassword" type="password" minlength="12" required autocomplete="new-password"></div>
+  <div class="field"><label for="resetPasswordConfirm">Confirmar nova senha</label><input id="resetPasswordConfirm" type="password" minlength="12" required autocomplete="new-password"></div>
+  <button class="btn" type="submit">Salvar nova senha</button>
+</form>
+<div id="resetMessage" role="status" aria-live="polite" style="white-space:pre-wrap;margin:12px 0"></div>
+</section>
 <div id="appView" class="hidden">
-<header><div><h1>Painel de Controle da Frota</h1><p>Disponibilidade • Manutenção • Calibração • Emissões</p></div><div><span id="userInfo"></span> <button class="btn secondary" id="exportAll">Exportar JSON</button> <button class="btn secondary" id="logoutBtn">Sair</button></div></header>
+<header><div><h1>Painel de Controle da Frota</h1><p>Disponibilidade • Manutenção • Calibração • Emissões</p></div><div><span id="userInfo"></span> <button class="btn secondary" id="myAccountBtn">Minha conta</button> <button class="btn secondary" id="exportAll">Exportar JSON</button> <button class="btn secondary" id="logoutBtn">Sair</button></div></header>
 <main class="wrap"><div class="notice" id="roleNotice"></div><div class="tabs" id="tabs"></div><section id="dashboard"></section>
 <section class="panel hidden" id="tablePanel"><div class="toolbar"><input type="search" id="search" placeholder="Pesquisar nesta aba..."><button class="btn" id="addBtn">+ Novo registro</button></div><div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div></section>
 <section class="panel hidden" id="userAdminPanel">
@@ -32,6 +42,20 @@
   <div class="toolbar"><button class="btn secondary" id="refreshUsersBtn" type="button">Atualizar lista</button></div>
   <div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody id="usersTbody"><tr><td colspan="5" class="empty">Carregue a lista para começar.</td></tr></tbody></table></div>
 </section></main><footer>Painel de Controle da Frota • Dados compartilhados via Supabase</footer></div>
+<div class="modal hidden" id="accountModal"><div class="modal-box">
+<div class="modal-head"><h2>Minha conta</h2><button class="btn secondary" id="closeAccountModal" type="button">Fechar</button></div>
+<p class="muted" id="accountEmail"></p>
+<h3>Alterar minha senha</h3>
+<form id="changePasswordForm">
+  <div class="form-grid">
+    <div class="field full"><label for="currentPassword">Senha atual</label><input id="currentPassword" type="password" required autocomplete="current-password"></div>
+    <div class="field"><label for="newPassword">Nova senha (mínimo 12 caracteres)</label><input id="newPassword" type="password" minlength="12" required autocomplete="new-password"></div>
+    <div class="field"><label for="confirmNewPassword">Confirmar nova senha</label><input id="confirmNewPassword" type="password" minlength="12" required autocomplete="new-password"></div>
+  </div>
+  <div id="accountMessage" role="status" aria-live="polite" style="white-space:pre-wrap;margin:12px 0"></div>
+  <div class="form-actions"><button type="button" class="btn secondary" id="cancelAccountModal">Cancelar</button><button class="btn" type="submit">Alterar senha</button></div>
+</form>
+</div></div>
 <div class="modal hidden" id="modal"><div class="modal-box"><div class="modal-head"><h2 id="modalTitle">Novo registro</h2><button class="btn secondary" id="closeModal">Fechar</button></div><form id="recordForm"><div class="form-grid" id="formFields"></div><div class="form-actions"><button type="button" class="btn secondary" id="cancelForm">Cancelar</button><button class="btn" type="submit">Salvar registro</button></div></form></div></div>
 <script>
 /* COLE A URL E A CHAVE PUBLICÁVEL DO SEU PROJETO NOS DOIS CAMPOS ABAIXO. */
@@ -59,6 +83,7 @@ function statusBadge(v){let s=String(v||"");let cls=/vencido|indisponível|parad
 async function startApp(){
  if(SUPABASE_URL.startsWith("COLE_AQUI")||SUPABASE_PUBLISHABLE_KEY.startsWith("COLE_AQUI")){showMessage("Falta configurar a URL e a Publishable key no arquivo index.html antes de publicar.");return}
  supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+ supabaseClient.auth.onAuthStateChange((event, session)=>{if(event==="PASSWORD_RECOVERY"){ $("authView").classList.add("hidden");$("appView").classList.add("hidden");$("resetView").classList.remove("hidden");}});
  const {data:{session}}=await supabaseClient.auth.getSession();
  if(session) await enterApp(session.user);
 }
@@ -66,7 +91,7 @@ async function enterApp(u){
  user=u;const {data:profile,error}=await supabaseClient.from("profiles").select("role,nome").eq("id",u.id).maybeSingle();
  if(error||!profile){showMessage("Não foi possível localizar seu perfil. Confira se a tabela profiles contém seu usuário.");return}
  userRole=profile.role||"consulta";$("authView").classList.add("hidden");$("appView").classList.remove("hidden");
- $("userInfo").textContent=(profile.nome||u.email)+" ("+userRole+")";
+ $("userInfo").textContent=(profile.nome||u.email)+" ("+userRole+")";$("accountEmail").textContent="E-mail: "+(u.email||"");
  $("roleNotice").textContent=userRole==="consulta"?"Seu perfil permite visualizar os registros, sem cadastrar, editar ou excluir.":userRole==="administrador"?"Você está conectado como administrador.":"Você está conectado como editor.";
  $("addBtn").classList.toggle("hidden",userRole==="consulta");
  await loadRecords();render();
@@ -177,6 +202,50 @@ $("userCreateForm").onsubmit=async e=>{
 };
 $("refreshUsersBtn").onclick=loadManagedUsers;
 
+// Alteração de senha: reautentica com a senha atual antes de atualizar.
+$("myAccountBtn").onclick=()=>{$("accountMessage").textContent="";$("changePasswordForm").reset();$("accountModal").classList.remove("hidden")};
+function closeAccountModal(){$("accountModal").classList.add("hidden")}
+$("closeAccountModal").onclick=closeAccountModal;
+$("cancelAccountModal").onclick=closeAccountModal;
+$("changePasswordForm").onsubmit=async e=>{
+  e.preventDefault();
+  const current=$("currentPassword").value;
+  const next=$("newPassword").value;
+  const confirmNext=$("confirmNewPassword").value;
+  const msg=$("accountMessage");
+  if(next.length<12){msg.style.color="var(--red)";msg.textContent="A nova senha deve ter pelo menos 12 caracteres.";return}
+  if(next!==confirmNext){msg.style.color="var(--red)";msg.textContent="A confirmação não corresponde à nova senha.";return}
+  if(next===current){msg.style.color="var(--red)";msg.textContent="Escolha uma senha diferente da atual.";return}
+  msg.style.color="var(--muted)";msg.textContent="Validando senha atual...";
+  const {error: reauthError}=await supabaseClient.auth.signInWithPassword({email:user.email,password:current});
+  if(reauthError){msg.style.color="var(--red)";msg.textContent="A senha atual não foi validada. Confira e tente novamente.";return}
+  const {error}=await supabaseClient.auth.updateUser({password:next});
+  if(error){msg.style.color="var(--red)";msg.textContent="Não foi possível alterar a senha: "+error.message;return}
+  $("changePasswordForm").reset();msg.style.color="var(--green)";msg.textContent="Senha alterada com sucesso.";
+};
+$("forgotPasswordBtn").onclick=async()=>{
+  const email=$("email").value.trim();
+  if(!email){showMessage("Informe seu e-mail no campo acima e clique novamente em Esqueci minha senha.");$("email").focus();return}
+  showMessage("Enviando solicitação de recuperação...");
+  const redirectTo=window.location.origin+window.location.pathname+"?redefinir-senha=1";
+  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo});
+  if(error){showMessage("Não foi possível enviar o e-mail de recuperação: "+error.message);return}
+  showMessage("Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha. Verifique também a caixa de spam.");
+};
+$("resetPasswordForm").onsubmit=async e=>{
+  e.preventDefault();
+  const next=$("resetPassword").value,confirmNext=$("resetPasswordConfirm").value;
+  if(next.length<12){$("resetMessage").style.color="var(--red)";$("resetMessage").textContent="A senha deve ter pelo menos 12 caracteres.";return}
+  if(next!==confirmNext){$("resetMessage").style.color="var(--red)";$("resetMessage").textContent="As senhas não correspondem.";return}
+  const {error}=await supabaseClient.auth.updateUser({password:next});
+  if(error){$("resetMessage").style.color="var(--red)";$("resetMessage").textContent="Não foi possível redefinir a senha. Solicite um novo link e tente novamente.";return}
+  $("resetMessage").style.color="var(--green)";$("resetMessage").textContent="Senha redefinida com sucesso. Você já pode entrar com a nova senha.";
+  $("resetPasswordForm").reset();
+  setTimeout(()=>{window.location.href=window.location.origin+window.location.pathname},1800);
+};
+if(new URLSearchParams(window.location.search).get("redefinir-senha")==="1"){
+  $("authView").classList.add("hidden");$("resetView").classList.remove("hidden");
+}
 $("loginForm").onsubmit=async e=>{e.preventDefault();showMessage("Entrando...");if(!supabaseClient){if(SUPABASE_URL.startsWith("COLE_AQUI")||SUPABASE_PUBLISHABLE_KEY.startsWith("COLE_AQUI")){showMessage("Falta configurar a URL e a Publishable key no arquivo index.html.");return}supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY)}const {data,error}=await supabaseClient.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error){showMessage("Não foi possível entrar: "+error.message);return}showMessage("");await enterApp(data.user)};
 $("logoutBtn").onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
 $("addBtn").onclick=()=>openForm();$("closeModal").onclick=closeForm;$("cancelForm").onclick=closeForm;$("search").oninput=renderTable;
