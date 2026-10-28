@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Controle da Frota</title>
+<style>
+:root{--navy:#14263d;--blue:#1d5d91;--bg:#f3f6fa;--line:#dce4ed;--text:#172334;--muted:#66758a;--green:#198754;--red:#c43d4b;--amber:#b8790b}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--navy);color:white;padding:20px 26px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:23px}header p{margin:6px 0 0;color:#d5e1ee;font-size:13px}
+.wrap{max-width:1400px;margin:auto;padding:20px}
+.notice{background:#fff8df;border:1px solid #f0d88b;color:#6c5313;border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:16px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tabs button,.btn{border:0;border-radius:7px;padding:10px 13px;cursor:pointer;font-weight:600}
+.tabs button{background:#e3eaf2;color:#31445a}.tabs button.active{background:var(--blue);color:#fff}
+.btn{background:var(--blue);color:white}.btn.secondary{background:#e3eaf2;color:#24384d}.btn.danger{background:var(--red)}.btn.small{padding:6px 9px;font-size:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:18px}
+.card,.panel{background:white;border:1px solid var(--line);border-radius:10px;padding:16px;box-shadow:0 2px 8px #152b4508}
+.card .label{font-size:12px;color:var(--muted);margin-bottom:9px}.card .value{font-size:28px;font-weight:700}.card .hint{font-size:12px;color:var(--muted);margin-top:7px}
+.panel h2{font-size:18px;margin:0 0 14px}.toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input,select,textarea{font:inherit;border:1px solid #cbd5e1;border-radius:7px;padding:9px 10px;background:white;min-width:0}
+input[type="search"]{flex:1;min-width:210px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:850px;background:white}th,td{text-align:left;padding:11px 12px;border-bottom:1px solid #e8edf3;font-size:13px;vertical-align:top}th{background:#f6f8fb;color:#4c5c70;position:sticky;top:0}tr:last-child td{border-bottom:0}.muted{color:var(--muted)}.badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#e8edf3;color:#44556a}.badge.green{background:#d9f4e4;color:#17663b}.badge.red{background:#ffe0e2;color:#9c2531}.badge.amber{background:#fff0ce;color:#845800}
+.empty{padding:28px;text-align:center;color:var(--muted)}.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:#0b1728a8;display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}.modal-box{background:white;border-radius:12px;padding:22px;width:min(760px,100%);max-height:90vh;overflow:auto}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.modal-head h2{margin:0}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:12px;color:var(--muted);font-weight:700}.field.full{grid-column:1/-1}textarea{min-height:80px}.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:600px){.wrap{padding:12px}header{padding:17px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.card .value{font-size:24px}}
+</style>
+</head>
+<body>
+<header><div><h1>Painel de Controle da Frota</h1><p>Disponibilidade • Manutenção • Calibração • Emissões</p></div><button class="btn secondary" id="exportAll">Exportar dados (JSON)</button></header>
+<main class="wrap">
+<div class="notice"><strong>Versão inicial demonstrativa:</strong> os registros são salvos neste navegador. Para uso por várias pessoas com login individual e dados compartilhados, é necessário conectar o painel a um banco de dados e configurar permissões. Não insira dados confidenciais nesta versão.</div>
+<div class="tabs" id="tabs"></div>
+<section id="dashboard"></section>
+<section class="panel" id="tablePanel">
+<div class="toolbar"><input type="search" id="search" placeholder="Pesquisar nesta aba..."><select id="statusFilter"><option value="">Todos os status</option><option>Disponível</option><option>Indisponível</option><option>Em manutenção</option><option>Em dia</option><option>Próximo do vencimento</option><option>Vencido</option><option>Pendente</option><option>Concluído</option></select><button class="btn" id="addBtn">+ Novo registro</button></div>
+<div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+</section>
+</main>
+<footer>Painel de Controle da Frota • Protótipo inicial</footer>
+<div class="modal hidden" id="modal"><div class="modal-box"><div class="modal-head"><h2 id="modalTitle">Novo registro</h2><button class="btn secondary" id="closeModal">Fechar</button></div><form id="recordForm"><div class="form-grid" id="formFields"></div><div class="form-actions"><button type="button" class="btn secondary" id="cancelForm">Cancelar</button><button class="btn" type="submit">Salvar registro</button></div></form></div></div>
+<script>
+const schemas = {
+"Panorama":["Indicador","Valor","Observações"],
+"Compromisso":["Obra/Contrato","Categoria","Quantidade demandada","Quantidade disponível","Responsável","Observações"],
+"Por categoria":["Categoria","Total de equipamentos","Disponíveis","Indisponíveis","Observações"],
+"Evolução":["Data","Indicador","Valor","Unidade","Observações"],
+"Equipamentos parados":["Prefixo","Categoria","Modelo","Obra","Localização","Motivo da parada","Data de início","Previsão de retorno","Responsável","Status","Observações"],
+"Frota completa":["Prefixo","Categoria","Modelo","Número de série","Obra","Localização","Status","Data de entrada","Defeito/Intervenção","Data de início da parada","Previsão de retorno","Observações"],
+"Material rodante":["Prefixo","Equipamento","Obra","Data da última limpeza","Próxima limpeza","Última manutenção","Próxima manutenção","Status","Responsável","Observações"],
+"Calibração":["Prefixo","Equipamento","Tipo de calibração","Data da última calibração","Data de vencimento","Responsável","Status","Observações"],
+"Emissões":["Prefixo","Equipamento","Obra","Data do último teste","Data de vencimento","Ciclo (dias)","Dias até vencer","Status","Observações"],
+"Movimentações":["Data","Prefixo","Equipamento","Origem","Destino","Tipo de movimentação","Responsável","Observações"]
+};
+let activeTab = "Panorama", editingIndex = null;
+let data = {};
+const STORE_KEY = "painel_frota_v1";
+function load(){try{data=JSON.parse(localStorage.getItem(STORE_KEY)||"{}")}catch(e){data={}};Object.keys(schemas).forEach(k=>{if(!Array.isArray(data[k]))data[k]=[]})}
+function save(){localStorage.setItem(STORE_KEY,JSON.stringify(data))}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function renderTabs(){document.getElementById("tabs").innerHTML=Object.keys(schemas).map(t=>`<button class="${t===activeTab?'active':''}" data-tab="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("");document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;render()})}
+function statusBadge(v){let s=String(v||"");let cls=/vencido|indisponível|parado/i.test(s)?"red":/próximo|pendente|manutenção/i.test(s)?"amber":/disponível|em dia|concluído/i.test(s)?"green":"";return `<span class="badge ${cls}">${escapeHtml(s||"—")}</span>`}
+function renderDashboard(){
+ const fleet=data["Frota completa"], stopped=data["Equipamentos parados"], calib=data["Calibração"], emis=data["Emissões"];
+ const count=(arr,field,rx)=>arr.filter(r=>rx.test(String(r[field]||""))).length;
+ document.getElementById("dashboard").innerHTML=activeTab!=="Panorama"?"":`<div class="cards">
+ <div class="card"><div class="label">Equipamentos cadastrados</div><div class="value">${fleet.length}</div><div class="hint">Frota completa</div></div>
+ <div class="card"><div class="label">Disponíveis</div><div class="value">${count(fleet,"Status",/disponível/i)}</div><div class="hint">Status da frota</div></div>
+ <div class="card"><div class="label">Indisponíveis</div><div class="value">${count(fleet,"Status",/indisponível|parado|manutenção/i)}</div><div class="hint">Inclui equipamentos parados</div></div>
+ <div class="card"><div class="label">Equipamentos parados</div><div class="value">${stopped.length}</div><div class="hint">Registros na aba de paradas</div></div>
+ <div class="card"><div class="label">Calibrações vencidas</div><div class="value">${count(calib,"Status",/vencido/i)}</div><div class="hint">Controle de calibração</div></div>
+ <div class="card"><div class="label">Emissões pendentes/vencidas</div><div class="value">${count(emis,"Status",/vencido|pendente/i)}</div><div class="hint">Controle de emissões</div></div>
+ </div><div class="panel"><h2>Comece por aqui</h2><p class="muted">Cadastre os equipamentos na aba <strong>Frota completa</strong>. Depois registre paradas, manutenções, calibrações, emissões e movimentações nas abas correspondentes. Os indicadores deste painel são calculados com base nos registros cadastrados.</p></div>`;
+}
+function renderTable(){
+ const fields=schemas[activeTab], q=document.getElementById("search").value.toLowerCase(), sf=document.getElementById("statusFilter").value;
+ document.getElementById("thead").innerHTML="<tr>"+fields.map(f=>`<th>${escapeHtml(f)}</th>`).join("")+"<th>Ações</th></tr>";
+ let rows=data[activeTab].map((r,i)=>({r,i})).filter(({r})=>(!sf||String(r.Status||"")===sf)&&fields.some(f=>String(r[f]??"").toLowerCase().includes(q)));
+ document.getElementById("tbody").innerHTML=rows.length?rows.map(({r,i})=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(r[f]):escapeHtml(r[f]||"—")}</td>`).join("")}<td><button class="btn small secondary" data-edit="${i}">Editar</button> <button class="btn small danger" data-del="${i}">Excluir</button></td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+1}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
+ document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openForm(Number(b.dataset.edit)));
+ document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRecord(Number(b.dataset.del)));
+}
+function render(){renderTabs();renderDashboard();document.getElementById("tablePanel").classList.toggle("hidden",activeTab==="Panorama");document.getElementById("search").value="";document.getElementById("statusFilter").value="";renderTable()}
+function openForm(index=null){
+ editingIndex=index;const row=index===null?{}:data[activeTab][index];document.getElementById("modalTitle").textContent=index===null?`Novo registro — ${activeTab}`:`Editar registro — ${activeTab}`;
+ document.getElementById("formFields").innerHTML=schemas[activeTab].map((f,i)=>{let value=row[f]??"";let input=/observações|motivo|defeito|intervenção/i.test(f)?`<textarea name="${escapeHtml(f)}">${escapeHtml(value)}</textarea>`:f==="Status"?`<select name="${escapeHtml(f)}"><option value="">Selecione...</option>${["Disponível","Indisponível","Em manutenção","Em dia","Próximo do vencimento","Vencido","Pendente","Concluído"].map(s=>`<option ${value===s?"selected":""}>${s}</option>`).join("")}</select>`:`<input name="${escapeHtml(f)}" value="${escapeHtml(value)}" ${/data/i.test(f)?'placeholder="DD/MM/AAAA"':""}>`;
+ return `<div class="field ${/observações|motivo|defeito|intervenção/i.test(f)?"full":""}"><label>${escapeHtml(f)}</label>${input}</div>`}).join("");
+ document.getElementById("modal").classList.remove("hidden");
+}
+function closeForm(){document.getElementById("modal").classList.add("hidden")}
+function delRecord(i){if(confirm("Deseja excluir este registro? Esta ação não pode ser desfeita.")){data[activeTab].splice(i,1);save();render()}}
+document.getElementById("addBtn").onclick=()=>openForm();
+document.getElementById("closeModal").onclick=closeForm;document.getElementById("cancelForm").onclick=closeForm;
+document.getElementById("search").oninput=renderTable;document.getElementById("statusFilter").onchange=renderTable;
+document.getElementById("recordForm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),row={};for(const [k,v] of fd.entries())row[k]=v.trim();if(editingIndex===null)data[activeTab].push(row);else data[activeTab][editingIndex]=row;save();closeForm();render()};
+document.getElementById("exportAll").onclick=()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="backup_painel_frota.json";a.click();URL.revokeObjectURL(a.href)};
+load();render();
+</script>
+</body></html>
