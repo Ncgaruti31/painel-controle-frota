@@ -1,0 +1,19 @@
+PAINEL DE CONTROLE DA FROTA — VERSÃO INICIAL
+
+Conteúdo:
+- index.html: protótipo navegável com abas, cadastro, edição, exclusão, pesquisa e exportação JSON.
+- supabase_schema.sql: estrutura inicial de tabelas para futura conexão com banco de dados.
+
+COMO TESTAR:
+1. Extraia o ZIP.
+2. Abra index.html em um navegador atualizado.
+3. Use as abas e o botão “Novo registro” para cadastrar dados.
+4. Os dados ficam salvos no armazenamento local do navegador usado para abrir o arquivo.
+5. “Exportar dados (JSON)” gera um backup dos registros.
+
+LIMITAÇÕES IMPORTANTES:
+- Esta é uma versão inicial demonstrativa, não a implantação multiusuário final.
+- Os dados não são compartilhados entre computadores/navegadores.
+- Não há autenticação real nesta versão; não inserir dados confidenciais.
+- Para atender ao requisito de usuários com login e permissões diferentes, é necessário criar um projeto Supabase, configurar Auth, banco de dados e políticas de segurança (RLS), conectar o front-end e publicar o site.
+- O SQL fornecido é um ponto de partida e não deve ser colocado em produção sem completar e testar as políticas de segurança.
