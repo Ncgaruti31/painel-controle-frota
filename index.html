@@ -344,7 +344,7 @@ function render(){
 function openForm(id=null){
  if(userRole==="consulta")return;editingId=id;const item=id?records.find(x=>x.id===id):null,row=item?.dados||{};
  $("modalTitle").textContent=(id?"Editar registro — ":"Novo registro — ")+activeTab;
- $("formFields").innerHTML=schemas[activeTab].map(f=>{let v=row[f]??"";let inp=/observações|motivo|defeito|intervenção/i.test(f)?`<textarea name="${esc(f)}">${esc(v)}</textarea>`:f==="Status"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Disponível","Indisponível","Em manutenção","Em dia","Próximo do vencimento","Vencido","Pendente","Concluído"].map(s=>`<option ${v===s?"selected":""}>${s}</option>`).join("")}</select>`:`<input name="${esc(f)}" value="${esc(v)}">`;
+ $("formFields").innerHTML=schemas[activeTab].map(f=>{let v=row[f]??"";let inp=/observações|motivo|defeito|intervenção/i.test(f)?`<textarea name="${esc(f)}">${esc(v)}</textarea>`:f==="Status"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Disponível","Disponível c/ Restrição","Indisponível","Em manutenção","Em dia","Próximo do vencimento","Vencido","Pendente","Concluído"].map(s=>`<option ${v===s?"selected":""}>${s}</option>`).join("")}</select>`:`<input name="${esc(f)}" value="${esc(v)}">`;
  return `<div class="field ${/observações|motivo|defeito|intervenção/i.test(f)?"full":""}"><label>${esc(f)}</label>${inp}</div>`}).join("");$("modal").classList.remove("hidden");
 }
 function closeForm(){$("modal").classList.add("hidden")}
