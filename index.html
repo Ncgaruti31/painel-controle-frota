@@ -277,8 +277,8 @@ function evolutionAvailabilityRows(days){
   .filter(x=>x.date&&x.value!==null&&x.date>=cutoff&&x.value>=0&&x.value<=100)
   .sort((a,b)=>a.date-b.date);
 }
-function renderEvolutionDashboard(){
- const dash=$('dashboard');
+function renderEvolutionDashboard(targetId="dashboard"){
+ const dash=$(targetId);
  const fleet=records.filter(r=>r.categoria==='Frota completa');
  const stops=records.filter(r=>r.categoria==='Equipamentos parados');
  const today=new Date();today.setHours(0,0,0,0);
@@ -293,15 +293,12 @@ function renderEvolutionDashboard(){
  const top=Object.entries(topCounts).map(([prefix,x])=>({prefix,...x})).sort((a,b)=>b.count-a.count||a.prefix.localeCompare(b.prefix)).slice(0,5);
  const available=fleet.filter(r=>availabilityIsAvailable(r)&&!availabilityExcluded(r)).length;const eligible=fleet.filter(r=>!availabilityExcluded(r)).length;const currentPct=eligible?Math.round(available/eligible*100):0;
  dash.innerHTML=`<div class="evolution-wrap">
- <section class="evolution-panel evolution-chart-panel"><div class="evolution-chart-head"><div><h2>EVOLUÇÃO E INDICADORES</h2><p class="evolution-subtitle" id="evolutionChartSubtitle">Disponibilidade da frota · calculada a partir dos registros da aba Evolução</p></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="evolution-range"><button type="button" data-evolution-days="30" class="active">30 dias</button><button type="button" data-evolution-days="60">60 dias</button><button type="button" data-evolution-days="90">90 dias</button></div>${userRole!=="consulta"?`<button type="button" class="btn small" id="addEvolutionRecord">+ Registrar indicador</button>`:""}</div></div><div id="evolutionChartArea"></div></section>
+ <section class="evolution-panel evolution-chart-panel"><div class="evolution-chart-head"><div><h2>EVOLUÇÃO E INDICADORES</h2><p class="evolution-subtitle" id="evolutionChartSubtitle">Disponibilidade da frota · calculada a partir dos registros da aba Evolução</p></div><div class="evolution-range"><button type="button" data-evolution-days="30" class="active">30 dias</button><button type="button" data-evolution-days="60">60 dias</button><button type="button" data-evolution-days="90">90 dias</button></div></div><div id="evolutionChartArea"></div></section>
  <section class="evolution-kpi"><div class="evolution-kpi-label">Tempo médio de parada</div><div class="evolution-kpi-value">${avg===null?'—':avg.toLocaleString('pt-BR',{maximumFractionDigits:1,minimumFractionDigits:1})}<small> dias</small></div><div class="evolution-kpi-note">${manualAvg.length?'Último indicador informado na aba Evolução':completedDurations.length?`Média de ${completedDurations.length} parada(s) concluída(s) cadastrada(s)`:'Informe o indicador “Tempo médio de parada” na aba Evolução ou cadastre datas de início e conclusão das paradas.'}</div></section>
  <section class="evolution-kpi"><div class="evolution-kpi-label">Parados além da previsão</div><div class="evolution-kpi-value">${overdue.length}<small> de ${activeStops.length}</small></div><div class="evolution-kpi-note">${overdue.length?overdue.map(r=>esc(r.dados?.Prefixo||r.dados?.Equipamento||'Sem prefixo')).join(', '):'Nenhuma parada ativa ultrapassou a previsão cadastrada.'}</div></section>
  <section class="evolution-panel evolution-kpi wide"><h3>QUEM MAIS PAROU · últimos 90 dias</h3><p class="evolution-subtitle">Contagem com base nos registros de parada cadastrados no sistema.</p>${top.length?top.map(x=>`<div class="evolution-top-item"><div class="evolution-top-line"><span>${esc(x.prefix)}</span><span class="evolution-top-bar"><span style="width:${Math.max(8,Math.round(x.count/top[0].count*100))}%"></span></span><span>${x.count}×</span></div><div class="evolution-top-detail">${esc([x.model,x.category].filter(Boolean).join(' · ')||'Equipamento')}</div></div>`).join(''):'<div class="evolution-empty">Ainda não há histórico de paradas com datas dentro dos últimos 90 dias. Cadastre as paradas na aba Equipamentos parados para alimentar este indicador.</div>'}</section>
- <section class="evolution-panel" style="grid-column:1/-1"><h3>REGISTROS DE EVOLUÇÃO</h3><p class="evolution-subtitle">Cadastre um ponto por data. Para alimentar o gráfico, use o indicador “Disponibilidade da frota” e o valor em percentual de 0 a 100.</p><div class="table-wrap"><table style="min-width:650px"><thead><tr><th>Data</th><th>Indicador</th><th>Valor</th><th>Unidade</th><th>Observações</th>${userRole!=="consulta"?"<th>Ações</th>":""}</tr></thead><tbody>${records.filter(r=>r.categoria==="Evolução").sort((a,b)=>(evolutionDate(b)||0)-(evolutionDate(a)||0)).map(r=>`<tr><td>${esc(r.dados?.Data||"—")}</td><td>${esc(r.dados?.Indicador||"—")}</td><td>${esc(r.dados?.Valor||"—")}</td><td>${esc(r.dados?.Unidade||"—")}</td><td>${esc(r.dados?.Observações||"—")}</td>${userRole!=="consulta"?`<td><button class="btn small secondary" data-edit-evolution="${esc(r.id)}">Editar</button> <button class="btn small danger" data-delete-evolution="${esc(r.id)}">Excluir</button></td>`:""}</tr>`).join("")||`<tr><td colspan="${userRole!=="consulta"?6:5}" class="empty">Nenhum indicador cadastrado. Use “Registrar indicador” para começar.</td></tr>`}</tbody></table></div></section>
+
  </div>`;
- const addEvolution=$('addEvolutionRecord');if(addEvolution)addEvolution.onclick=()=>openForm();
- dash.querySelectorAll('[data-edit-evolution]').forEach(btn=>btn.onclick=()=>openForm(btn.dataset.editEvolution));
- dash.querySelectorAll('[data-delete-evolution]').forEach(btn=>btn.onclick=()=>deleteRecord(btn.dataset.deleteEvolution));
  const drawChart=(days)=>{
   const rows=evolutionAvailabilityRows(days);const area=$('evolutionChartArea');
   const cutoff=new Date(today);cutoff.setDate(cutoff.getDate()-days+1);
@@ -319,13 +316,14 @@ function renderEvolutionDashboard(){
  dash.querySelectorAll('[data-evolution-days]').forEach(btn=>btn.onclick=()=>{dash.querySelectorAll('[data-evolution-days]').forEach(b=>b.classList.toggle('active',b===btn));drawChart(Number(btn.dataset.evolutionDays))});drawChart(30);
 }
 function renderDashboard(){
- if(activeTab==="Evolução"){renderEvolutionDashboard();return}
+ if(activeTab==="Evolução"){$("dashboard").innerHTML="";return}
  if(activeTab!=="Panorama"){$("dashboard").innerHTML="";return}
  const fleet=records.filter(x=>x.categoria==="Frota completa"),stopped=records.filter(x=>x.categoria==="Equipamentos parados"),calib=records.filter(x=>x.categoria==="Calibração"),emis=records.filter(x=>x.categoria==="Emissões");
  const count=(arr,field,rx)=>arr.filter(x=>rx.test(String(x.dados?.[field]||""))).length;const alerts=getDashboardAlerts();
  const alertRows=alerts.length?alerts.map(a=>`<tr><td>${esc(a.r.dados?.Prefixo||a.r.dados?.Equipamento||a.r.dados?.Modelo||a.r.id)}</td><td>${esc(a.r.categoria)}</td><td>${esc(a.d.toLocaleDateString("pt-BR"))}</td><td>${esc(a.r.dados?.Obra||"—")}</td><td>${esc(a.r.dados?.Localização||"—")}</td><td><span class="badge ${a.days<0?"red":a.days<=7?"amber":""}">${esc(a.label)}</span></td></tr>`).join(""):`<tr><td class="empty" colspan="6">Nenhum vencimento ou prazo nos próximos 30 dias.</td></tr>`;
- $("dashboard").innerHTML=`<div class="cards"><div class="card"><div class="label">Equipamentos cadastrados</div><div class="value">${fleet.length}</div><div class="hint">Frota completa</div></div><div class="card"><div class="label">Disponíveis</div><div class="value">${count(fleet,"Status",/disponível/i)}</div><div class="hint">Status da frota</div></div><div class="card"><div class="label">Indisponíveis</div><div class="value">${count(fleet,"Status",/indisponível|parado|manutenção/i)}</div><div class="hint">Status da frota</div></div><div class="card"><div class="label">Equipamentos parados</div><div class="value">${stopped.length}</div><div class="hint">Registros de parada</div></div><div class="card"><div class="label">Calibrações vencidas</div><div class="value">${count(calib,"Status",/vencido/i)}</div><div class="hint">Controle de calibração</div></div><div class="card"><div class="label">Emissões pendentes/vencidas</div><div class="value">${count(emis,"Status",/vencido|pendente/i)}</div><div class="hint">Controle de emissões</div></div></div><div class="panel" style="margin-bottom:18px"><h2>🔔 Alertas de prazos e vencimentos</h2><p class="muted">Prazos vencidos e datas previstas para os próximos 30 dias.</p><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Prefixo/equipamento</th><th>Categoria</th><th>Prazo</th><th>Obra</th><th>Localização</th><th>Situação</th></tr></thead><tbody>${alertRows}</tbody></table></div><p class="muted" style="font-size:12px;margin-bottom:0">Os e-mails automáticos são enviados pelo serviço de alertas configurado no Supabase.</p></div><div class="panel"><h2>Comece por aqui</h2><p class="muted">Cadastre equipamentos na aba Frota completa. Depois registre paradas, calibrações, emissões e movimentações. Os registros serão compartilhados entre usuários autenticados do projeto.</p></div>`;
+ $("dashboard").innerHTML=`<div class="cards"><div class="card"><div class="label">Equipamentos cadastrados</div><div class="value">${fleet.length}</div><div class="hint">Frota completa</div></div><div class="card"><div class="label">Disponíveis</div><div class="value">${count(fleet,"Status",/disponível/i)}</div><div class="hint">Status da frota</div></div><div class="card"><div class="label">Indisponíveis</div><div class="value">${count(fleet,"Status",/indisponível|parado|manutenção/i)}</div><div class="hint">Status da frota</div></div><div class="card"><div class="label">Equipamentos parados</div><div class="value">${stopped.length}</div><div class="hint">Registros de parada</div></div><div class="card"><div class="label">Calibrações vencidas</div><div class="value">${count(calib,"Status",/vencido/i)}</div><div class="hint">Controle de calibração</div></div><div class="card"><div class="label">Emissões pendentes/vencidas</div><div class="value">${count(emis,"Status",/vencido|pendente/i)}</div><div class="hint">Controle de emissões</div></div></div><div id="evolutionIndicatorsPanel"></div><div class="panel" style="margin-bottom:18px"><h2>🔔 Alertas de prazos e vencimentos</h2><p class="muted">Prazos vencidos e datas previstas para os próximos 30 dias.</p><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Prefixo/equipamento</th><th>Categoria</th><th>Prazo</th><th>Obra</th><th>Localização</th><th>Situação</th></tr></thead><tbody>${alertRows}</tbody></table></div><p class="muted" style="font-size:12px;margin-bottom:0">Os e-mails automáticos são enviados pelo serviço de alertas configurado no Supabase.</p></div><div class="panel"><h2>Comece por aqui</h2><p class="muted">Cadastre equipamentos na aba Frota completa. Depois registre paradas, calibrações, emissões e movimentações. Os registros serão compartilhados entre usuários autenticados do projeto.</p></div>`;
  renderAvailability();
+ renderEvolutionDashboard("evolutionIndicatorsPanel");
 }
 function renderTable(){
  const fields=schemas[activeTab],q=$("search").value.toLowerCase();
@@ -337,11 +335,11 @@ function renderTable(){
 function render(){
   renderTabs();
   $("userAdminPanel").classList.toggle("hidden",!userAdminActive);
-  $("tablePanel").classList.toggle("hidden",userAdminActive||activeTab==="Panorama"||activeTab==="Evolução");
+  $("tablePanel").classList.toggle("hidden",userAdminActive||activeTab==="Panorama");
   $("dashboard").classList.toggle("hidden",userAdminActive);
   if(userAdminActive){$("dashboard").innerHTML="";return}
   $("dashboard").classList.remove("hidden");
-  renderDashboard();$("search").value="";if(activeTab!=="Evolução")renderTable()
+  renderDashboard();$("search").value="";if(activeTab!=="Panorama")renderTable()
 }
 function openForm(id=null){
  if(userRole==="consulta")return;editingId=id;const item=id?records.find(x=>x.id===id):null,row=item?.dados||{};
