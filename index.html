@@ -405,7 +405,10 @@ async function loadManagedUsers(){
         <td>${esc(u.nome||"—")}</td><td>${esc(u.email||"—")}</td>
         <td><select data-user-role="${esc(u.id)}" aria-label="Perfil de ${esc(u.email||"usuário")}">${roleOptions}</select></td>
         <td><span class="badge ${u.bloqueado?"red":"green"}">${status}</span></td>
-        <td><button class="btn small secondary" data-save-role="${esc(u.id)}">Salvar perfil</button> <button class="btn small ${u.bloqueado?"":"danger"}" data-toggle-block="${esc(u.id)}" data-blocked="${u.bloqueado?"true":"false"}">${blockLabel}</button></td>
+        <td><button class="btn small secondary" data-save-role="${esc(u.id)}">Salvar perfil</button>
+        <button class="btn small secondary" data-edit-user="${esc(u.id)}" ${u.id===user.id||u.role==="administrador"&&u.id!==user.id?"disabled":""}>Editar</button>
+        <button class="btn small danger" data-delete-user="${esc(u.id)}" ${u.id===user.id||u.role==="administrador"?"disabled":""}>Excluir</button>
+        <button class="btn small ${u.bloqueado?"":"danger"}" data-toggle-block="${esc(u.id)}" data-blocked="${u.bloqueado?"true":"false"}">${blockLabel}</button></td>
       </tr>`;
     }).join(""):'<tr><td colspan="5" class="empty">Nenhum usuário encontrado.</td></tr>';
     document.querySelectorAll("[data-save-role]").forEach(btn=>btn.onclick=async()=>{
@@ -414,6 +417,29 @@ async function loadManagedUsers(){
       if(!roleSelect)return;
       try{await callUserAdmin({action:"role",id,role:roleSelect.value});userAdminMessage("Perfil atualizado com sucesso.");await loadManagedUsers();}
       catch(err){userAdminMessage("Não foi possível atualizar o perfil: "+err.message,true);}
+    });
+    document.querySelectorAll("[data-edit-user]").forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.editUser;
+      const target=users.find(x=>x.id===id);
+      if(!target)return;
+      const nome=prompt("Nome do usuário:",target.nome||"");
+      if(nome===null)return;
+      const email=prompt("E-mail do usuário:",target.email||"");
+      if(email===null)return;
+      if(!nome.trim()||!email.trim()){userAdminMessage("Nome e e-mail são obrigatórios.",true);return;}
+      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim())){userAdminMessage("Informe um e-mail válido.",true);return;}
+      if(!confirm("Confirma a atualização do nome e e-mail deste usuário?"))return;
+      try{await callUserAdmin({action:"update",id,nome:nome.trim(),email:email.trim()});userAdminMessage("Dados do usuário atualizados com sucesso.");await loadManagedUsers();}
+      catch(err){userAdminMessage("Não foi possível atualizar o usuário: "+err.message,true);}
+    });
+    document.querySelectorAll("[data-delete-user]").forEach(btn=>btn.onclick=async()=>{
+      const id=btn.dataset.deleteUser;
+      const target=users.find(x=>x.id===id);
+      if(!target)return;
+      if(id===user.id){userAdminMessage("Não é permitido excluir a própria conta.",true);return;}
+      if(!confirm(`ATENÇÃO: deseja excluir definitivamente o usuário ${target.nome||target.email}? Esta ação não pode ser desfeita.`))return;
+      try{await callUserAdmin({action:"delete",id});userAdminMessage("Usuário excluído com sucesso.");await loadManagedUsers();}
+      catch(err){userAdminMessage("Não foi possível excluir o usuário: "+err.message,true);}
     });
     document.querySelectorAll("[data-toggle-block]").forEach(btn=>btn.onclick=async()=>{
       const id=btn.dataset.toggleBlock;
