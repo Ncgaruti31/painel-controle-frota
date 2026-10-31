@@ -274,33 +274,35 @@ body{background:linear-gradient(180deg,#e8eff5 0,#f4f7fa 340px);color:var(--text
  #appView>main.wrap>#userAdminPanel{grid-column:1!important;grid-row:auto!important}
 }
 
-/* V9 - fundo institucional Tracomal; preserva o grid estrutural V8 */
-body:has(#appView:not(.hidden)){
-  background-color:#eaf1f7!important;
-  background-image:
-    linear-gradient(rgba(242,247,251,.42),rgba(242,247,251,.50)),
-    url("fundo-tracomal.png")!important;
-  background-size:cover!important;
-  background-position:center center!important;
-  background-attachment:fixed!important;
-  background-repeat:no-repeat!important;
+
+/* V11: fundo aplicado ao painel inteiro sem alterar a faixa de indicadores */
+body{
+ background-color:#eaf1f7!important;
+ background-image:linear-gradient(rgba(239,246,251,.20),rgba(239,246,251,.28)),url("fundo-tracomal.png")!important;
+ background-size:cover!important;background-position:center center!important;
+ background-attachment:fixed!important;background-repeat:no-repeat!important;
 }
-#appView{background:transparent!important;min-height:calc(100vh - 160px)}\n#appView>.wrap{background:transparent!important}
-#appView>.wrap>#roleNotice{backdrop-filter:blur(8px);background:rgba(255,249,226,.94)}
-#appView>.wrap>#lastChangeCard,
-#appView>.wrap>.cards .card,
-#appView>.wrap>#tabs,
-#appView>.wrap>#dashboard>.panel,
-#appView>.wrap>#tablePanel,
-#appView>.wrap>#userAdminPanel{
-  background:rgba(255,255,255,.94)!important;
-  backdrop-filter:blur(9px);
+#appView{background:transparent!important;min-height:calc(100vh - 160px)}
+#appView>.wrap{background:transparent!important;align-content:start!important;grid-auto-rows:max-content!important}
+#appView>.wrap>.cards{grid-column:1/-1!important;grid-row:3!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:12px!important;margin:0 0 2px!important}
+#appView>.wrap>#tabs{grid-column:1!important;grid-row:4!important;align-self:start!important}
+#appView>.wrap>#dashboard,#appView>.wrap>#tablePanel,#appView>.wrap>#userAdminPanel{
+ grid-column:2!important;grid-row:4!important;align-self:start!important;min-width:0!important;margin-top:0!important
 }
-#appView>.wrap>#tabs{border-color:rgba(205,220,234,.9)}
-#appView footer{background:rgba(255,255,255,.32);backdrop-filter:blur(5px);border-radius:12px}
+#appView>.wrap>#roleNotice,#appView>.wrap>#lastChangeCard{grid-column:1/-1!important;grid-row:auto!important}
+#appView>.wrap>.cards .card,#appView>.wrap>#lastChangeCard,#appView>.wrap>#tabs,
+#appView>.wrap>#dashboard>.panel,#appView>.wrap>#tablePanel,#appView>.wrap>#userAdminPanel{
+ background:rgba(255,255,255,.94)!important;backdrop-filter:blur(8px)
+}
+@media(max-width:1200px){#appView>.wrap>.cards{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
 @media(max-width:900px){
- body:has(#appView:not(.hidden)){background-attachment:scroll!important;background-position:center top!important}
+ body{background-attachment:scroll!important;background-position:center top!important}
+ #appView>.wrap{grid-template-columns:minmax(0,1fr)!important}
+ #appView>.wrap>.cards{grid-column:1!important;grid-row:3!important;grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ #appView>.wrap>#tabs,#appView>.wrap>#dashboard,#appView>.wrap>#tablePanel,#appView>.wrap>#userAdminPanel{grid-column:1!important;grid-row:auto!important}
+ #appView>.wrap>#tabs{flex-direction:row!important;max-height:none!important;overflow-x:auto!important}
 }
+@media(max-width:600px){#appView>.wrap>.cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 
 </style></head><body class="login-background">
 <section id="authView" class="auth">
