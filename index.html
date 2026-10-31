@@ -385,6 +385,7 @@ body{
   <div class="last-change-content">
     <div class="last-change-label"><span class="last-change-dot"></span> Última alteração</div>
     <div class="last-change-date" id="lastChangeDate">Carregando...</div>
+    <div class="last-change-zone" id="lastChangeUser">Alterado por: carregando...</div>
     <div class="last-change-zone">Horário de Brasília</div>
   </div>
   <button type="button" class="btn secondary" id="refreshLastChange">Buscar de novo</button>
@@ -481,20 +482,31 @@ function formatBrasiliaDate(value){
    hour:"2-digit",minute:"2-digit",hour12:false
  }).format(d).replace(",", "");
 }
-function updateLastChange(){
- const latest=records.reduce((best,item)=>{
-   const itemDate=Math.max(
-     item.created_at ? new Date(item.created_at).getTime() : 0,
-     item.updated_at ? new Date(item.updated_at).getTime() : 0
-   );
-   return itemDate>best?itemDate:best;
- },0);
- $("lastChangeDate").textContent=latest?formatBrasiliaDate(new Date(latest).toISOString()):"Sem registros";
+async function updateLastChange(){
+ const latestRecord=records.reduce((best,item)=>{
+   const created=item.created_at?new Date(item.created_at).getTime():0;
+   const updated=item.updated_at?new Date(item.updated_at).getTime():0;
+   const itemDate=Math.max(created,updated);
+   return itemDate>(best?.time||0)?{record:item,time:itemDate}:best;
+ },null);
+
+ $("lastChangeDate").textContent=latestRecord?.time?formatBrasiliaDate(new Date(latestRecord.time).toISOString()):"Sem registros";
+ const userEl=$("lastChangeUser");
+ if(!latestRecord?.record){userEl.textContent="Alterado por: —";return}
+
+ const actorId=latestRecord.record.updated_by||latestRecord.record.created_by;
+ if(!actorId){userEl.textContent="Alterado por: não identificado";return}
+
+ const {data:actor,error:actorError}=await supabaseClient
+   .from("profiles").select("nome").eq("id",actorId).maybeSingle();
+ userEl.textContent=!actorError&&actor?.nome
+   ?`Alterado por: ${actor.nome}`
+   :"Alterado por: usuário cadastrado";
 }
 async function loadRecords(){
  const {data,error}=await supabaseClient.from("frota_registros").select("*").order("created_at",{ascending:false});
  if(error){alert("Erro ao carregar dados: "+error.message);records=[];return}
- records=data||[];updateLastChange();
+ records=data||[];await updateLastChange();
 }
 function rowsForTab(){return records.filter(x=>x.categoria===activeTab)}
 function renderTabs(){
@@ -770,7 +782,7 @@ $("loginForm").onsubmit=async e=>{e.preventDefault();showMessage("Entrando...");
 $("logoutBtn").onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
 $("refreshLastChange").onclick=async()=>{const btn=$("refreshLastChange");btn.disabled=true;btn.textContent="Atualizando...";await loadRecords();render();btn.disabled=false;btn.textContent="Buscar de novo"};
 $("addBtn").onclick=()=>openForm();$("closeModal").onclick=closeForm;$("cancelForm").onclick=closeForm;$("search").oninput=renderTable;
-$("recordForm").onsubmit=async e=>{e.preventDefault();if(userRole==="consulta")return;const fd=new FormData(e.target),row={};for(const [k,v] of fd.entries())row[k]=v.trim();let result;if(editingId){result=await supabaseClient.from("frota_registros").update({dados:row,updated_at:new Date().toISOString()}).eq("id",editingId)}else{result=await supabaseClient.from("frota_registros").insert({categoria:activeTab,dados:row,created_by:user.id})}if(result.error){alert("Erro ao salvar: "+result.error.message);return}closeForm();await loadRecords();render()};
+$("recordForm").onsubmit=async e=>{e.preventDefault();if(userRole==="consulta")return;const fd=new FormData(e.target),row={};for(const [k,v] of fd.entries())row[k]=v.trim();let result;if(editingId){result=await supabaseClient.from("frota_registros").update({dados:row,updated_at:new Date().toISOString(),updated_by:user.id}).eq("id",editingId)}else{result=await supabaseClient.from("frota_registros").insert({categoria:activeTab,dados:row,created_by:user.id})}if(result.error){alert("Erro ao salvar: "+result.error.message);return}closeForm();await loadRecords();render()};
 $("shareVisitorBtn").onclick=async()=>{
  const visitorUrl=new URL("visualizacao.html",window.location.href).href;
  try{
