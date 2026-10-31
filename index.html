@@ -616,11 +616,22 @@ function renderDashboard(){
  renderAvailability();
  renderEvolutionDashboard("evolutionIndicatorsPanel");
 }
+function displayTableValue(field,value){
+ if(value===null||value===undefined||value==="")return "—";
+ const isDate=/\bdata\b|data de|previsão|próxima|última/i.test(String(field))&&!/dias|ciclo/i.test(String(field));
+ if(!isDate)return String(value);
+ const raw=String(value).trim();
+ let m=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+ if(m)return `${m[3]}/${m[2]}/${m[1]}`;
+ m=raw.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/);
+ if(m)return `${m[1].padStart(2,"0")}/${m[2].padStart(2,"0")}/${m[3]}`;
+ return raw;
+}
 function renderTable(){
  const fields=schemas[activeTab],q=$("search").value.toLowerCase();
  $("thead").innerHTML="<tr>"+fields.map(f=>`<th>${esc(f)}</th>`).join("")+"<th>Ações</th></tr>";
  const list=rowsForTab().filter(x=>fields.some(f=>String(x.dados?.[f]??"").toLowerCase().includes(q)));
- $("tbody").innerHTML=list.length?list.map(x=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(x.dados?.[f]):esc(x.dados?.[f]||"—")}</td>`).join("")}<td>${userRole==="consulta"?"—":`<button class="btn small secondary" data-edit="${x.id}">Editar</button> <button class="btn small danger" data-del="${x.id}">Excluir</button>`}</td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+1}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
+ $("tbody").innerHTML=list.length?list.map(x=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(x.dados?.[f]):esc(displayTableValue(f,x.dados?.[f]))}</td>`).join("")}<td>${userRole==="consulta"?"—":`<button class="btn small secondary" data-edit="${x.id}">Editar</button> <button class="btn small danger" data-del="${x.id}">Excluir</button>`}</td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+1}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openForm(b.dataset.edit));document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRecord(b.dataset.del));
 }
 function render(){
@@ -782,7 +793,7 @@ $("loginForm").onsubmit=async e=>{e.preventDefault();showMessage("Entrando...");
 $("logoutBtn").onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
 $("refreshLastChange").onclick=async()=>{const btn=$("refreshLastChange");btn.disabled=true;btn.textContent="Atualizando...";await loadRecords();render();btn.disabled=false;btn.textContent="Buscar de novo"};
 $("addBtn").onclick=()=>openForm();$("closeModal").onclick=closeForm;$("cancelForm").onclick=closeForm;$("search").oninput=renderTable;
-$("recordForm").onsubmit=async e=>{e.preventDefault();if(userRole==="consulta")return;const fd=new FormData(e.target),row={};for(const [k,v] of fd.entries())row[k]=v.trim();let result;if(editingId){result=await supabaseClient.from("frota_registros").update({dados:row,updated_at:new Date().toISOString(),updated_by:user.id}).eq("id",editingId)}else{result=await supabaseClient.from("frota_registros").insert({categoria:activeTab,dados:row,created_by:user.id})}if(result.error){alert("Erro ao salvar: "+result.error.message);return}closeForm();await loadRecords();render()};
+$("recordForm").onsubmit=async e=>{e.preventDefault();if(userRole==="consulta")return;const fd=new FormData(e.target),row={};for(const [k,v] of fd.entries())row[k]=v.trim();let result;if(editingId){result=await supabaseClient.from("frota_registros").update({dados:row,updated_at:new Date().toISOString(),updated_by:user.id}).eq("id",editingId);if(result.error&&/updated_by.*(column|schema cache)|column.*updated_by/i.test(result.error.message)){result=await supabaseClient.from("frota_registros").update({dados:row,updated_at:new Date().toISOString()}).eq("id",editingId);if(!result.error)alert("Registro salvo. Para registrar também o nome de quem editou, execute o SQL de atualização incluído no pacote.")}}else{result=await supabaseClient.from("frota_registros").insert({categoria:activeTab,dados:row,created_by:user.id})}if(result.error){alert("Erro ao salvar: "+result.error.message);return}closeForm();await loadRecords();render()};
 $("shareVisitorBtn").onclick=async()=>{
  const visitorUrl=new URL("visualizacao.html",window.location.href).href;
  try{
