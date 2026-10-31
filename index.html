@@ -275,17 +275,17 @@ body{background:linear-gradient(180deg,#e8eff5 0,#f4f7fa 340px);color:var(--text
 }
 
 /* V9 - fundo institucional Tracomal; preserva o grid estrutural V8 */
-body:not(.login-background){
+body:has(#appView:not(.hidden)){
   background-color:#eaf1f7!important;
   background-image:
-    linear-gradient(rgba(242,247,251,.78),rgba(242,247,251,.84)),
+    linear-gradient(rgba(242,247,251,.42),rgba(242,247,251,.50)),
     url("fundo-tracomal.png")!important;
   background-size:cover!important;
   background-position:center center!important;
   background-attachment:fixed!important;
   background-repeat:no-repeat!important;
 }
-#appView>.wrap{background:transparent!important}
+#appView{background:transparent!important;min-height:calc(100vh - 160px)}\n#appView>.wrap{background:transparent!important}
 #appView>.wrap>#roleNotice{backdrop-filter:blur(8px);background:rgba(255,249,226,.94)}
 #appView>.wrap>#lastChangeCard,
 #appView>.wrap>.cards .card,
@@ -299,7 +299,7 @@ body:not(.login-background){
 #appView>.wrap>#tabs{border-color:rgba(205,220,234,.9)}
 #appView footer{background:rgba(255,255,255,.32);backdrop-filter:blur(5px);border-radius:12px}
 @media(max-width:900px){
- body:not(.login-background){background-attachment:scroll!important;background-position:center top!important}
+ body:has(#appView:not(.hidden)){background-attachment:scroll!important;background-position:center top!important}
 }
 
 </style></head><body class="login-background">
