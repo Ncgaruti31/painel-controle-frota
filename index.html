@@ -591,7 +591,7 @@ function opsCommitmentHtml(){
 }
 function opsMovementsHtml(){const rows=records.filter(r=>r.categoria==='Movimentações').slice().sort((a,b)=>(opsDate(b.dados?.Data)?.getTime()||new Date(b.created_at||0).getTime())-(opsDate(a.dados?.Data)?.getTime()||new Date(a.created_at||0).getTime()));return `<section class="ops-section" id="opsMovements"><h2 class="ops-title">ÚLTIMAS MOVIMENTAÇÕES <span class="ops-muted">${rows.length} registradas — mostrando ${Math.min(rows.length,20)}</span></h2>${rows.slice(0,20).map(r=>{const d=r.dados||{},kind=String(d['Tipo de movimentação']||''),positive=/dispon[ií]vel para opera[cç][aã]o|liberad[oa]|retorno.*opera[cç]|dispon[ií]vel$/i.test(kind)&&!/indispon[ií]vel/i.test(kind),negative=/indispon[ií]vel|parad[oa]|manuten[cç][aã]o|retirad[oa] de opera[cç]/i.test(kind),state=negative?'negative':positive?'positive':'',date=opsDate(d.Data)||opsDate(r.created_at),dateText=date?date.toLocaleDateString('pt-BR'):'—',time=date&&(/T|\d{2}:\d{2}/.test(String(d.Data||r.created_at||'')))?date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';return `<div class="ops-movement ${state}"><div>${esc(dateText)}<div class="ops-muted">${esc(time)}</div></div><div><strong>${esc(d.Prefixo||'Sem prefixo')}</strong> <span class="ops-muted">${esc(d.Equipamento||'')}</span> <span class="ops-pill ${state}">${esc(kind||'Movimentação registrada')}</span><div class="ops-move-details">${esc(d.Observações||'—')}</div></div><div class="ops-move-place">${esc(d.Destino||d.Origem||'—')}</div></div>`}).join('')||'<div class="empty">Nenhuma movimentação registrada.</div>'}</section>`}
 
-function renderPurchasesDashboard(){const host=$("purchasesDashboardPanel");if(!host)return;const rows=records.filter(r=>r.categoria==="Compras").map(r=>r.dados||{});host.innerHTML=`<div class="panel" style="margin-bottom:18px"><h2>COMPRAS</h2><p class="muted">Solicitações e itens registrados no painel.</p><div class="table-wrap"><table style="min-width:720px"><thead><tr><th>Nº da Solicitação</th><th>Data da Solicitação</th><th>Equipamento de Aplicação</th><th>Produto / Item</th></tr></thead><tbody>${rows.length?rows.map(d=>`<tr><td>${esc(d["Nº da Solicitação"]||"—")}</td><td>${esc(d["Data da Solicitação"]||"—")}</td><td>${esc(d["Equipamento de Aplicação"]||"—")}</td><td>${esc(d["Produto / Item"]||"—")}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">Nenhuma solicitação de compra cadastrada.</td></tr>`}</tbody></table></div></div>`}
+function renderPurchasesDashboard(){const host=$("purchasesDashboardPanel");if(!host)return;const rows=records.filter(r=>r.categoria==="Compras");host.innerHTML=`<div class="panel" style="margin-bottom:18px"><h2>COMPRAS</h2><p class="muted">Solicitações em cotação por até 48 horas após o registro. Após esse prazo, o status é atualizado automaticamente.</p><div class="table-wrap"><table style="min-width:860px"><thead><tr><th>Nº da Solicitação</th><th>Data da Solicitação</th><th>Equipamento de Aplicação</th><th>Produto / Item</th><th>Status</th></tr></thead><tbody>${rows.length?rows.map(r=>{const d=r.dados||{};return `<tr><td>${esc(d["Nº da Solicitação"]||"—")}</td><td>${esc(displayTableValue("Data da Solicitação",d["Data da Solicitação"]))}</td><td>${esc(d["Equipamento de Aplicação"]||"—")}</td><td>${esc(d["Produto / Item"]||"—")}</td><td>${purchaseStatusBadge(r)}</td></tr>`}).join(""):`<tr><td colspan="5" class="empty">Nenhuma solicitação de compra cadastrada.</td></tr>`}</tbody></table></div></div>`}
 function renderDashboard(){
  const previousKpiStrip=document.querySelector("#appView>.wrap>.cards");
  if(previousKpiStrip) previousKpiStrip.remove();
@@ -661,11 +661,33 @@ async function syncStoppedRecordToFleet(stopData){
  }
  return {ok:true,count:matches.length};
 }
+
+function purchaseRequestStatus(record){
+ // Status manual de entrega tem prioridade sobre o prazo automático de 48 horas.
+ if(String(record?.dados?.["Status do pedido"]||"").trim()==="Pedido Entregue")return "Pedido Entregue";
+ const created=record?.created_at?Date.parse(record.created_at):NaN;
+ let start=Number.isFinite(created)?created:NaN;
+ if(!Number.isFinite(start)){
+   const raw=String(record?.dados?.["Data da Solicitação"]||"").trim();
+   const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+   const br=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+   if(m)start=new Date(+m[1],+m[2]-1,+m[3]).getTime();
+   else if(br)start=new Date(+br[3],+br[2]-1,+br[1]).getTime();
+ }
+ if(!Number.isFinite(start))return "Em cotação";
+ return Date.now()-start>=48*60*60*1000?"Pedido Atrasado":"Em cotação";
+}
+function purchaseStatusBadge(record){
+ const status=purchaseRequestStatus(record);
+ const color=status==="Em cotação"?"green":status==="Pedido Entregue"?"blue":"red";
+ return `<span class="badge ${color}">${status}</span>`;
+}
+
 function renderTable(){
- const fields=schemas[activeTab],q=$("search").value.toLowerCase();
- $("thead").innerHTML="<tr>"+fields.map(f=>`<th>${esc(f)}</th>`).join("")+"<th>Ações</th></tr>";
- const list=rowsForTab().filter(x=>fields.some(f=>String(x.dados?.[f]??"").toLowerCase().includes(q)));
- $("tbody").innerHTML=list.length?list.map(x=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(x.dados?.[f]):esc(displayTableValue(f,x.dados?.[f]))}</td>`).join("")}<td>${userRole==="consulta"?"—":`<button class="btn small secondary" data-edit="${x.id}">Editar</button> <button class="btn small danger" data-del="${x.id}">Excluir</button>`}</td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+1}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
+ const fields=schemas[activeTab],q=$("search").value.toLowerCase(),isPurchases=activeTab==="Compras";
+ const list=rowsForTab().filter(x=>fields.some(f=>String(x.dados?.[f]??"").toLowerCase().includes(q))||isPurchases&&purchaseRequestStatus(x).toLowerCase().includes(q));
+ $("thead").innerHTML="<tr>"+fields.map(f=>`<th>${esc(f)}</th>`).join("")+(isPurchases?"<th>Status</th>":"")+"<th>Ações</th></tr>";
+ $("tbody").innerHTML=list.length?list.map(x=>`<tr>${fields.map(f=>`<td>${f==="Status"?statusBadge(x.dados?.[f]):esc(displayTableValue(f,x.dados?.[f]))}</td>`).join("")}${isPurchases?`<td>${purchaseStatusBadge(x)}</td>`:""}<td>${userRole==="consulta"?"—":`<button class="btn small secondary" data-edit="${x.id}">Editar</button> <button class="btn small danger" data-del="${x.id}">Excluir</button>`}</td></tr>`).join(""):`<tr><td class="empty" colspan="${fields.length+(isPurchases?2:1)}">Nenhum registro nesta aba. Use “Novo registro” para começar.</td></tr>`;
  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openForm(b.dataset.edit));document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRecord(b.dataset.del));
 }
 function render(){
@@ -680,7 +702,12 @@ function render(){
 function openForm(id=null){
  if(userRole==="consulta")return;editingId=id;const item=id?records.find(x=>x.id===id):null,row=item?.dados||{};
  $("modalTitle").textContent=(id?"Editar registro — ":"Novo registro — ")+activeTab;
- $("formFields").innerHTML=schemas[activeTab].map(f=>{let v=row[f]??(f==="Demanda"?row["Obra/Contrato"]:"");const isDate=/\bdata\b|data de|previsão|próxima|última/i.test(f)&&!/dias|ciclo/i.test(f);let inp=/observações|motivo|defeito|intervenção/i.test(f)?`<textarea name="${esc(f)}">${esc(v)}</textarea>`:/horímetro/i.test(f)?`<input type="number" step="0.1" min="0" name="${esc(f)}" value="${esc(v)}">`:isDate?`<input type="date" name="${esc(f)}" value="${esc(opsDate(v)?[opsDate(v).getFullYear(),String(opsDate(v).getMonth()+1).padStart(2,'0'),String(opsDate(v).getDate()).padStart(2,'0')].join('-'):'')}">`:f==="Prefixo"&&activeTab!=="Frota completa"?`<input list="opsFleetPrefixes" name="${esc(f)}" value="${esc(v)}" placeholder="Selecione ou digite um prefixo"><datalist id="opsFleetPrefixes">${[...new Set(records.filter(r=>r.categoria==='Frota completa').map(r=>String(r.dados?.Prefixo||'').trim()).filter(Boolean))].sort().map(p=>`<option value="${esc(p)}"></option>`).join('')}</datalist>`:f==="Operação"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Operação ADM","Operação 12hrs","Operação 24hrs"].map(op=>`<option value="${esc(op)}" ${((v||"Operação ADM")===op)?"selected":""}>${esc(op)}</option>`).join("")}</select>`:f==="Status"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Disponível","Disponível c/ Restrição","Indisponível","Em manutenção","Em dia","Próximo do vencimento","Vencido","Pendente","Concluído"].map(s=>`<option ${v===s?"selected":""}>${s}</option>`).join("")}</select>`:`<input name="${esc(f)}" value="${esc(v)}">`;return `<div class="field ${/observações|motivo|defeito|intervenção/i.test(f)?"full":""}"><label>${esc(f)}</label>${inp}</div>`}).join("");$("modal").classList.remove("hidden");
+ $("formFields").innerHTML=schemas[activeTab].map(f=>{let v=row[f]??(f==="Demanda"?row["Obra/Contrato"]:"");const isDate=/\bdata\b|data de|previsão|próxima|última/i.test(f)&&!/dias|ciclo/i.test(f);let inp=/observações|motivo|defeito|intervenção/i.test(f)?`<textarea name="${esc(f)}">${esc(v)}</textarea>`:/horímetro/i.test(f)?`<input type="number" step="0.1" min="0" name="${esc(f)}" value="${esc(v)}">`:isDate?`<input type="date" name="${esc(f)}" value="${esc(opsDate(v)?[opsDate(v).getFullYear(),String(opsDate(v).getMonth()+1).padStart(2,'0'),String(opsDate(v).getDate()).padStart(2,'0')].join('-'):'')}">`:f==="Prefixo"&&activeTab!=="Frota completa"?`<input list="opsFleetPrefixes" name="${esc(f)}" value="${esc(v)}" placeholder="Selecione ou digite um prefixo"><datalist id="opsFleetPrefixes">${[...new Set(records.filter(r=>r.categoria==='Frota completa').map(r=>String(r.dados?.Prefixo||'').trim()).filter(Boolean))].sort().map(p=>`<option value="${esc(p)}"></option>`).join('')}</datalist>`:f==="Operação"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Operação ADM","Operação 12hrs","Operação 24hrs"].map(op=>`<option value="${esc(op)}" ${((v||"Operação ADM")===op)?"selected":""}>${esc(op)}</option>`).join("")}</select>`:f==="Status"?`<select name="${esc(f)}"><option value="">Selecione...</option>${["Disponível","Disponível c/ Restrição","Indisponível","Em manutenção","Em dia","Próximo do vencimento","Vencido","Pendente","Concluído"].map(s=>`<option ${v===s?"selected":""}>${s}</option>`).join("")}</select>`:`<input name="${esc(f)}" value="${esc(v)}">`;return `<div class="field ${/observações|motivo|defeito|intervenção/i.test(f)?"full":""}"><label>${esc(f)}</label>${inp}</div>`}).join("");
+ if(activeTab==="Compras"){
+   const savedStatus=String(row["Status do pedido"]||"");
+   $("formFields").insertAdjacentHTML("beforeend",`<div class="field"><label for="purchaseManualStatus">Status do pedido</label><select id="purchaseManualStatus" name="Status do pedido"><option value="Automático (48h)" ${savedStatus!=="Pedido Entregue"?"selected":""}>Automático (48h)</option><option value="Pedido Entregue" ${savedStatus==="Pedido Entregue"?"selected":""}>Pedido Entregue</option></select><small class="muted">Selecione “Pedido Entregue” quando o pedido for concluído. Essa opção ficará azul.</small></div>`);
+ }
+ $("modal").classList.remove("hidden");
 }
 function closeForm(){$("modal").classList.add("hidden")}
 async function deleteRecord(id){if(userRole==="consulta"||!confirm("Deseja excluir este registro? Esta ação não pode ser desfeita."))return;const {error}=await supabaseClient.from("frota_registros").delete().eq("id",id);if(error){alert("Não foi possível excluir: "+error.message);return}await loadRecords();render()}
@@ -839,4 +866,5 @@ $("shareVisitorBtn").onclick=async()=>{
 };
 $("exportAll").onclick=()=>{const obj={};Object.keys(schemas).forEach(k=>obj[k]=records.filter(x=>x.categoria===k).map(x=>x.dados));const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.download="backup_painel_frota.json";a.click();URL.revokeObjectURL(a.href)};
 startApp();
+setInterval(()=>{if(activeTab==="Compras"&&!userAdminActive)renderTable();renderPurchasesDashboard()},60000);
 </script></body></html>
